@@ -3,6 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
 const path = require('path');
+const { v4: uuidv4 } = require('uuid');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -18,7 +19,8 @@ const config = {
   userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4.1 Mobile/15E148 Safari/604.1",
   endpoints: {
     b_graph: "https://b-graph.facebook.com",
-    key: "https://b-api.facebook.com"
+    key: "https://b-api.facebook.com",
+    business: "https://business.facebook.com"
   },
   oauthToken: "350685531728|62f8ce9f74b12f84c123cc23437a4a32"
 };
@@ -37,17 +39,27 @@ class FacebookTokenService {
     try {
       const headers = {
         'authorization': `OAuth ${config.oauthToken}`,
-        'content-type': 'application/x-www-form-urlencoded'
+        'x-fb-friendly-name': 'Authenticate',
+        'x-fb-connection-type': 'Unknown',
+        'accept-encoding': 'gzip, deflate',
+        'content-type': 'application/x-www-form-urlencoded',
+        'x-fb-http-engine': 'Liger'
       };
 
       const data = new URLSearchParams({
-        email,
-        password,
-        'format': 'json',
-        'credentials_type': 'password',
-        'source': 'login',
-        'generate_session_cookies': '0',
-        'generate_machine_id': '0'
+        adid: this.generateRandomHex(16),
+        format: 'json',
+        device_id: uuidv4(),
+        email: email,
+        password: password,
+        generate_analytics_claims: '0',
+        credentials_type: 'password',
+        source: 'login',
+        error_detail_type: 'button_with_disabled',
+        enroll_misauth: 'false',
+        generate_session_cookies: '0',
+        generate_machine_id: '0',
+        fb_api_req_friendly_name: 'authenticate',
       });
 
       const response = await this.axios.post(
@@ -59,7 +71,7 @@ class FacebookTokenService {
       if (response.data.access_token) {
         return { 
           success: true,
-          token: response.data.access_token 
+          token: response.data.access_token.trim()
         };
       } else {
         return { 
@@ -77,13 +89,13 @@ class FacebookTokenService {
 
   async getEaad6v7Token(eaaauToken) {
     try {
-      const url = `${config.endpoints.key}/method/auth.getSessionforApp?format=json&access_token=${eaaauToken}&new_app_id=275254692598279`;
+      const url = `${config.endpoints.key}/method/auth.getSessionforApp?format=json&access_token=${eaaauToken.trim()}&new_app_id=275254692598279`;
       const response = await this.axios.get(url);
 
       if (response.data.access_token) {
         return {
           success: true,
-          token: response.data.access_token
+          token: response.data.access_token.trim()
         };
       } else {
         return {
@@ -99,60 +111,65 @@ class FacebookTokenService {
     }
   }
 
-  async getBothTokens(email, password) {
-    // Get EAAAU token first
-    const eaaauResult = await this.getEaaauToken(email, password);
-    if (!eaaauResult.success) {
-      return {
-        status: 400,
-        error: eaaauResult.error || 'Failed to authenticate with Facebook'
-      };
+  generateRandomHex(length) {
+    const chars = '0123456789abcdef';
+    let result = '';
+    for (let i = 0; i < length; i++) {
+      result += chars.charAt(Math.floor(Math.random() * chars.length));
     }
-
-    // Then get EAAD6V7 token
-    const eaad6v7Result = await this.getEaad6v7Token(eaaauResult.token);
-    if (!eaad6v7Result.success) {
-      return {
-        status: 400,
-        error: eaad6v7Result.error || 'Failed to generate EAAD6V7 token',
-        partialData: {
-          EAAAU: eaaauResult.token
-        }
-      };
-    }
-
-    return {
-      status: 200,
-      data: {
-        EAAAU: eaaauResult.token,
-        EAAD6V7: eaad6v7Result.token,
-        timestamp: new Date().toISOString()
-      }
-    };
+    return result;
   }
 }
 
-// Single endpoint
-app.get('/get', async (req, res) => {
+// Main endpoint
+app.get('/get/token', async (req, res) => {
   try {
-    const { u: username, pw: password } = req.query;
+    const { u: username, p: password } = req.query;
     
     if (!username || !password) {
       return res.status(400).json({
-        status: 400,
-        error: 'Both username and password parameters are required'
+        success: false,
+        error: 'Both username (u) and password (p) parameters are required'
       });
     }
 
     const service = new FacebookTokenService();
-    const result = await service.getBothTokens(username, password);
+    
+    // Get EAAAU token first
+    const eaaauResult = await service.getEaaauToken(username, password);
+    if (!eaaauResult.success) {
+      return res.status(400).json({
+        success: false,
+        error: eaaauResult.error
+      });
+    }
 
-    res.status(result.status).json(result);
+    // Then get EAAD6V7 token
+    const eaad6v7Result = await service.getEaad6v7Token(eaaauResult.token);
+    
+    if (!eaad6v7Result.success) {
+      return res.json({
+        success: true,
+        tokens: {
+          eaaau: eaaauResult.token,
+          eaad6v7: null
+        },
+        error: eaad6v7Result.error
+      });
+    }
+
+    res.json({
+      success: true,
+      tokens: {
+        eaaau: eaaauResult.token,
+        eaad6v7: eaad6v7Result.token
+      }
+    });
+    
   } catch (error) {
     res.status(500).json({
-      status: 500,
-      error: 'Internal server error',
-      details: error.message
+      success: false,
+      error: 'Internal server error'
     });
   }
 });
