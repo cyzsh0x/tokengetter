@@ -7,7 +7,7 @@ const uuid = require('uuid');
 const path = require('path');
 
 const app = express();
-const PORT = process.env.PORT || 11001;
+const PORT = process.env.PORT || 3000;
 
 // Middleware
 app.use(cors());
@@ -16,7 +16,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Enhanced configuration
+// Configuration
 const config = {
   userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4.1 Mobile/15E148 Safari/604.1",
   endpoints: {
@@ -28,7 +28,7 @@ const config = {
   requestTimeout: 10000
 };
 
-// Enhanced error messages
+// Error messages
 const errorMessages = {
   ACCOUNT_IN_CHECKPOINT: "Account is in checkpoint. Please resolve this on Facebook first.",
   WRONG_CREDENTIALS: "Invalid email or password.",
@@ -36,16 +36,6 @@ const errorMessages = {
   REQUEST_LIMIT: "Request limit reached. Try again later or use a VPN.",
   MISSING_FIELDS: "Please fill all required fields.",
   DEFAULT: "An unexpected error occurred. Please try again."
-};
-
-const detectErrorType = (error) => {
-  if (!error) return 'DEFAULT';
-  const errorStr = String(error).toLowerCase();
-  if (errorStr.includes('checkpoint')) return 'ACCOUNT_IN_CHECKPOINT';
-  if (errorStr.includes('credential') || errorStr.includes('password')) return 'WRONG_CREDENTIALS';
-  if (errorStr.includes('exist') || errorStr.includes('found')) return 'ACCOUNT_NOT_EXIST';
-  if (errorStr.includes('limit') || errorStr.includes('many')) return 'REQUEST_LIMIT';
-  return 'DEFAULT';
 };
 
 class FacebookTokenService {
@@ -98,17 +88,18 @@ class FacebookTokenService {
         };
       }
       
-      const errorType = detectErrorType(response.data?.error?.message);
+      const error = response.data?.error?.message || 'Unknown error';
       return {
         success: false,
-        error: errorMessages[errorType] || errorMessages.DEFAULT
+        error: error.includes('checkpoint') ? errorMessages.ACCOUNT_IN_CHECKPOINT : 
+              error.includes('credentials') ? errorMessages.WRONG_CREDENTIALS :
+              errorMessages.DEFAULT
       };
       
     } catch (error) {
-      const errorType = detectErrorType(error.response?.data?.error?.message || error.message);
       return {
         success: false,
-        error: errorMessages[errorType] || errorMessages.DEFAULT
+        error: error.response?.data?.error?.message || errorMessages.DEFAULT
       };
     }
   }
@@ -140,17 +131,13 @@ class FacebookTokenService {
 
   async getEaagToken(cookies) {
     try {
-      let cookieString;
+      let cookieString = cookies;
       try {
         const cookieObj = JSON.parse(cookies);
         if (Array.isArray(cookieObj)) {
           cookieString = cookieObj.map(c => `${c.name}=${c.value}`).join('; ');
-        } else {
-          cookieString = cookies;
         }
-      } catch {
-        cookieString = cookies;
-      }
+      } catch {}
       
       const headers = {
         'authority': 'business.facebook.com',
@@ -175,7 +162,7 @@ class FacebookTokenService {
       
       return {
         success: false,
-        error: "EAAG token not found in response. Are the cookies valid?"
+        error: "EAAG token not found. Check if cookies are valid."
       };
       
     } catch (error) {
@@ -187,75 +174,48 @@ class FacebookTokenService {
   }
 
   async getBothTokens(email, password) {
-    try {
-      const eaaauResult = await this.getEaaauToken(email, password);
-      if (!eaaauResult.success) {
-        return eaaauResult;
-      }
-      
-      const eaad6v7Result = await this.getEaad6v7Token(eaaauResult.token);
-      
-      return {
-        success: eaad6v7Result.success,
-        eaaau: eaaauResult.token,
-        eaad6v7: eaad6v7Result.token,
-        error: eaad6v7Result.error
-      };
-      
-    } catch (error) {
-      return {
-        success: false,
-        error: errorMessages.DEFAULT
-      };
+    const eaaauResult = await this.getEaaauToken(email, password);
+    if (!eaaauResult.success) {
+      return eaaauResult;
     }
+    
+    const eaad6v7Result = await this.getEaad6v7Token(eaaauResult.token);
+    return {
+      success: eaad6v7Result.success,
+      eaaau: eaaauResult.token,
+      eaad6v7: eaad6v7Result.token,
+      error: eaad6v7Result.error
+    };
   }
 }
 
 // API Routes
 app.post('/api/token', async (req, res) => {
-  try {
-    const { email, password } = req.body;
-    if (!email || !password) {
-      return res.status(400).json({ 
-        success: false,
-        error: errorMessages.MISSING_FIELDS
-      });
-    }
-
-    const service = new FacebookTokenService();
-    const result = await service.getBothTokens(email, password);
-    
-    res.json(result);
-  } catch (error) {
-    console.error('Error in /api/token:', error);
-    res.status(500).json({ 
+  const { email, password } = req.body;
+  if (!email || !password) {
+    return res.status(400).json({ 
       success: false,
-      error: errorMessages.DEFAULT
+      error: errorMessages.MISSING_FIELDS
     });
   }
+
+  const service = new FacebookTokenService();
+  const result = await service.getBothTokens(email, password);
+  res.json(result);
 });
 
 app.post('/api/eaag', async (req, res) => {
-  try {
-    const { cookies } = req.body;
-    if (!cookies) {
-      return res.status(400).json({ 
-        success: false,
-        error: errorMessages.MISSING_FIELDS
-      });
-    }
-
-    const service = new FacebookTokenService();
-    const result = await service.getEaagToken(cookies);
-    
-    res.json(result);
-  } catch (error) {
-    console.error('Error in /api/eaag:', error);
-    res.status(500).json({ 
+  const { cookies } = req.body;
+  if (!cookies) {
+    return res.status(400).json({ 
       success: false,
-      error: errorMessages.DEFAULT
+      error: errorMessages.MISSING_FIELDS
     });
   }
+
+  const service = new FacebookTokenService();
+  const result = await service.getEaagToken(cookies);
+  res.json(result);
 });
 
 // Serve frontend
@@ -263,9 +223,9 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// Error handling middleware
+// Error handling
 app.use((err, req, res, next) => {
-  console.error('Server error:', err);
+  console.error(err);
   res.status(500).json({ 
     success: false,
     error: errorMessages.DEFAULT
@@ -273,5 +233,5 @@ app.use((err, req, res, next) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`Server running on http://localhost:${PORT}`);
 });
