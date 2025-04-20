@@ -3,33 +3,8 @@ document.addEventListener('DOMContentLoaded', () => {
   // Initialize Lucide icons
   lucide.createIcons();
   
-  // Tab switching
-  const loginTabBtn = document.getElementById('login-tab-btn');
-  const cookiesTabBtn = document.getElementById('cookies-tab-btn');
-  const loginTab = document.getElementById('login-tab');
-  const cookiesTab = document.getElementById('cookies-tab');
-  
-  loginTabBtn.addEventListener('click', () => {
-    loginTabBtn.classList.add('active');
-    cookiesTabBtn.classList.remove('active');
-    loginTab.classList.remove('hidden');
-    loginTab.classList.add('active');
-    cookiesTab.classList.add('hidden');
-    cookiesTab.classList.remove('active');
-  });
-  
-  cookiesTabBtn.addEventListener('click', () => {
-    cookiesTabBtn.classList.add('active');
-    loginTabBtn.classList.remove('active');
-    cookiesTab.classList.remove('hidden');
-    cookiesTab.classList.add('active');
-    loginTab.classList.add('hidden');
-    loginTab.classList.remove('active');
-  });
-  
-  // Form submissions
+  // Form elements
   const tokensForm = document.getElementById('tokens-form');
-  const cookiesForm = document.getElementById('cookies-form');
   const loadingOverlay = document.getElementById('loading-overlay');
   const loadingText = document.getElementById('loading-text');
   
@@ -90,79 +65,51 @@ document.addEventListener('DOMContentLoaded', () => {
     showLoading('Authenticating with Facebook...');
     
     try {
-      const response = await fetch('/token', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ email, password })
-      });
-      
+      const response = await fetch(`/get?u=${encodeURIComponent(email)}&pw=${encodeURIComponent(password)}`);
       const data = await response.json();
       
-      if (data.success) {
+      if (data.status === 200) {
         showSuccess('Tokens Retrieved Successfully!', `
           <div class="text-left space-y-4">
             <div>
-              <h3 class="font-medium text-blue-400 mb-1">EAAAAU Token</h3>
+              <h3 class="font-medium text-blue-400 mb-1">EAAAU Token</h3>
               <div class="bg-gray-800 p-3 rounded-lg font-mono text-sm relative">
-                <button onclick="copyToClipboard('${data.eaaau}')" class="absolute top-2 right-2 text-gray-400 hover:text-white">
+                <button onclick="copyToClipboard('${data.data.EAAAU}')" class="absolute top-2 right-2 text-gray-400 hover:text-white">
                   <i data-lucide="copy" class="w-4 h-4"></i>
                 </button>
-                ${data.eaaau}
+                ${data.data.EAAAU}
               </div>
             </div>
             <div>
               <h3 class="font-medium text-purple-400 mb-1">EAAD6V7 Token</h3>
               <div class="bg-gray-800 p-3 rounded-lg font-mono text-sm relative">
-                <button onclick="copyToClipboard('${data.eaad6v7}')" class="absolute top-2 right-2 text-gray-400 hover:text-white">
+                <button onclick="copyToClipboard('${data.data.EAAD6V7}')" class="absolute top-2 right-2 text-gray-400 hover:text-white">
                   <i data-lucide="copy" class="w-4 h-4"></i>
                 </button>
-                ${data.eaad6v7}
+                ${data.data.EAAD6V7}
               </div>
             </div>
           </div>
         `);
       } else {
-        showError(data.error);
-      }
-    } catch (error) {
-      showError('Network error. Please try again.');
-    } finally {
-      hideLoading();
-    }
-  });
-  
-  cookiesForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const cookies = document.getElementById('cookies').value;
-    
-    showLoading('Extracting EAAG Token...');
-    
-    try {
-      const response = await fetch('/eaag', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ cookies })
-      });
-      
-      const data = await response.json();
-      
-      if (data.success) {
-        showSuccess('EAAG Token Extracted!', `
-          <div class="text-left">
-            <div class="bg-gray-800 p-3 rounded-lg font-mono text-sm relative">
-              <button onclick="copyToClipboard('${data.token}')" class="absolute top-2 right-2 text-gray-400 hover:text-white">
-                <i data-lucide="copy" class="w-4 h-4"></i>
-              </button>
-              ${data.token}
+        if (data.partialData) {
+          showSuccess('Partial Success', `
+            <div class="text-left space-y-4">
+              <div>
+                <h3 class="font-medium text-blue-400 mb-1">EAAAU Token</h3>
+                <div class="bg-gray-800 p-3 rounded-lg font-mono text-sm relative">
+                  <button onclick="copyToClipboard('${data.partialData.EAAAU}')" class="absolute top-2 right-2 text-gray-400 hover:text-white">
+                    <i data-lucide="copy" class="w-4 h-4"></i>
+                  </button>
+                  ${data.partialData.EAAAU}
+                </div>
+              </div>
+              <p class="text-red-400">Error: ${data.error}</p>
             </div>
-          </div>
-        `);
-      } else {
-        showError(data.error);
+          `);
+        } else {
+          showError(data.error || 'Failed to get tokens');
+        }
       }
     } catch (error) {
       showError('Network error. Please try again.');
