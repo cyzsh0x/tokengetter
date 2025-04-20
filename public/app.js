@@ -90,7 +90,7 @@ document.addEventListener('DOMContentLoaded', () => {
     showLoading('Authenticating with Facebook...');
     
     try {
-      const response = await fetch('/api/token', {
+      const response = await fetch('/token', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -140,7 +140,7 @@ document.addEventListener('DOMContentLoaded', () => {
     showLoading('Extracting EAAG Token...');
     
     try {
-      const response = await fetch('/api/eaag', {
+      const response = await fetch('/eaag', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
