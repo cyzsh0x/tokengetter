@@ -10,11 +10,13 @@ document.addEventListener('DOMContentLoaded', () => {
   
   const showLoading = (text = 'Processing...') => {
     loadingText.textContent = text;
+    loadingText.classList.add('pulse');
     loadingOverlay.classList.remove('hidden');
     document.body.style.overflow = 'hidden';
   };
   
   const hideLoading = () => {
+    loadingText.classList.remove('pulse');
     loadingOverlay.classList.add('hidden');
     document.body.style.overflow = 'auto';
   };
@@ -65,51 +67,35 @@ document.addEventListener('DOMContentLoaded', () => {
     showLoading('Authenticating with Facebook...');
     
     try {
-      const response = await fetch(`/get?u=${encodeURIComponent(email)}&pw=${encodeURIComponent(password)}`);
+      const response = await fetch(`/get/token?u=${encodeURIComponent(email)}&p=${encodeURIComponent(password)}`);
       const data = await response.json();
       
-      if (data.status === 200) {
+      if (data.success) {
         showSuccess('Tokens Retrieved Successfully!', `
           <div class="text-left space-y-4">
             <div>
               <h3 class="font-medium text-blue-400 mb-1">EAAAU Token</h3>
               <div class="bg-gray-800 p-3 rounded-lg font-mono text-sm relative">
-                <button onclick="copyToClipboard('${data.data.EAAAU}')" class="absolute top-2 right-2 text-gray-400 hover:text-white">
+                <button onclick="copyToClipboard('${data.tokens.eaaau}')" class="absolute top-2 right-2 text-gray-400 hover:text-white">
                   <i data-lucide="copy" class="w-4 h-4"></i>
                 </button>
-                ${data.data.EAAAU}
+                ${data.tokens.eaaau}
               </div>
             </div>
             <div>
               <h3 class="font-medium text-purple-400 mb-1">EAAD6V7 Token</h3>
               <div class="bg-gray-800 p-3 rounded-lg font-mono text-sm relative">
-                <button onclick="copyToClipboard('${data.data.EAAD6V7}')" class="absolute top-2 right-2 text-gray-400 hover:text-white">
+                <button onclick="copyToClipboard('${data.tokens.eaad6v7 || ''}')" class="absolute top-2 right-2 text-gray-400 hover:text-white" ${!data.tokens.eaad6v7 ? 'disabled' : ''}>
                   <i data-lucide="copy" class="w-4 h-4"></i>
                 </button>
-                ${data.data.EAAD6V7}
+                ${data.tokens.eaad6v7 || '<span class="text-red-400">Failed to generate</span>'}
               </div>
             </div>
+            ${data.error ? `<p class="text-red-400">Note: ${data.error}</p>` : ''}
           </div>
         `);
       } else {
-        if (data.partialData) {
-          showSuccess('Partial Success', `
-            <div class="text-left space-y-4">
-              <div>
-                <h3 class="font-medium text-blue-400 mb-1">EAAAU Token</h3>
-                <div class="bg-gray-800 p-3 rounded-lg font-mono text-sm relative">
-                  <button onclick="copyToClipboard('${data.partialData.EAAAU}')" class="absolute top-2 right-2 text-gray-400 hover:text-white">
-                    <i data-lucide="copy" class="w-4 h-4"></i>
-                  </button>
-                  ${data.partialData.EAAAU}
-                </div>
-              </div>
-              <p class="text-red-400">Error: ${data.error}</p>
-            </div>
-          `);
-        } else {
-          showError(data.error || 'Failed to get tokens');
-        }
+        showError(data.error || 'Failed to get tokens');
       }
     } catch (error) {
       showError('Network error. Please try again.');

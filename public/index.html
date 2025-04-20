@@ -23,10 +23,6 @@
 
     <!-- Main Card -->
     <div class="glass-card p-8 rounded-2xl shadow-2xl mb-8 animate__animated animate__fadeInUp">
-      <h2 class="text-2xl font-semibold mb-6 flex items-center">
-        <i data-lucide="key" class="w-6 h-6 mr-2 text-blue-400"></i>
-        EAAAAU & EAAD6V7 Token Getter
-      </h2>
       
       <form id="tokens-form" class="space-y-6">
         <div class="space-y-2">
@@ -37,7 +33,7 @@
             </div>
             <input id="email" name="email" type="text" required 
               class="bg-gray-800 border border-gray-700 text-white rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full pl-10 p-2.5"
-              placeholder="your@email.com">
+              placeholder="User">
           </div>
         </div>
         
@@ -49,13 +45,12 @@
             </div>
             <input id="password" name="password" type="password" required 
               class="bg-gray-800 border border-gray-700 text-white rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full pl-10 p-2.5"
-              placeholder="••••••••">
+              placeholder="Password">
           </div>
         </div>
         
         <button type="submit" id="submit-btn" class="w-full gradient-btn py-3 px-4 rounded-lg font-medium flex items-center justify-center">
-          <i data-lucide="key" class="w-5 h-5 mr-2"></i>
-          Generate Token
+          Generate
         </button>
       </form>
     </div>
@@ -69,8 +64,8 @@
   <!-- Loading Overlay -->
   <div id="loading-overlay" class="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 hidden">
     <div class="text-center">
-      <div class="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-blue-500 mx-auto mb-4"></div>
-      <p class="text-white text-lg font-medium" id="loading-text">Processing...</p>
+      <div class="simple-spinner"></div>
+      <p class="text-white text-lg font-medium mt-4" id="loading-text">Processing...</p>
     </div>
   </div>
 
