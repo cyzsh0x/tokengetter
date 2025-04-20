@@ -1,4 +1,3 @@
-// index.js
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
@@ -8,7 +7,7 @@ const uuid = require('uuid');
 const path = require('path');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 11001;
 
 // Middleware
 app.use(cors());
@@ -39,15 +38,13 @@ const errorMessages = {
   DEFAULT: "An unexpected error occurred. Please try again."
 };
 
-// Helper functions
-const simulateLoading = (ms = 2000) => new Promise(resolve => setTimeout(resolve, ms));
-
 const detectErrorType = (error) => {
+  if (!error) return 'DEFAULT';
   const errorStr = String(error).toLowerCase();
   if (errorStr.includes('checkpoint')) return 'ACCOUNT_IN_CHECKPOINT';
-  if (errorStr.includes('credentials')) return 'WRONG_CREDENTIALS';
-  if (errorStr.includes('exist')) return 'ACCOUNT_NOT_EXIST';
-  if (errorStr.includes('limit')) return 'REQUEST_LIMIT';
+  if (errorStr.includes('credential') || errorStr.includes('password')) return 'WRONG_CREDENTIALS';
+  if (errorStr.includes('exist') || errorStr.includes('found')) return 'ACCOUNT_NOT_EXIST';
+  if (errorStr.includes('limit') || errorStr.includes('many')) return 'REQUEST_LIMIT';
   return 'DEFAULT';
 };
 
@@ -64,8 +61,6 @@ class FacebookTokenService {
 
   async getEaaauToken(email, password) {
     try {
-      await simulateLoading(3000);
-      
       const headers = {
         'authorization': `OAuth ${config.oauthToken}`,
         'x-fb-friendly-name': 'Authenticate',
@@ -120,8 +115,6 @@ class FacebookTokenService {
 
   async getEaad6v7Token(eaaauToken) {
     try {
-      await simulateLoading(3000);
-      
       const url = `${config.endpoints.key}/method/auth.getSessionforApp?format=json&access_token=${eaaauToken}&new_app_id=275254692598279`;
       const response = await this.session.get(url);
       
@@ -147,19 +140,16 @@ class FacebookTokenService {
 
   async getEaagToken(cookies) {
     try {
-      await simulateLoading(3000);
-      
-      // Handle both JSON and string cookie formats
       let cookieString;
       try {
         const cookieObj = JSON.parse(cookies);
         if (Array.isArray(cookieObj)) {
           cookieString = cookieObj.map(c => `${c.name}=${c.value}`).join('; ');
         } else {
-          cookieString = cookies; // Assume it's already in string format
+          cookieString = cookies;
         }
       } catch {
-        cookieString = cookies; // Not JSON, use as-is
+        cookieString = cookies;
       }
       
       const headers = {
@@ -198,13 +188,11 @@ class FacebookTokenService {
 
   async getBothTokens(email, password) {
     try {
-      // Get EAAAAU token
       const eaaauResult = await this.getEaaauToken(email, password);
       if (!eaaauResult.success) {
         return eaaauResult;
       }
       
-      // Get EAAD6V7 token
       const eaad6v7Result = await this.getEaad6v7Token(eaaauResult.token);
       
       return {
@@ -225,33 +213,49 @@ class FacebookTokenService {
 
 // API Routes
 app.post('/api/token', async (req, res) => {
-  const { email, password } = req.body;
-  if (!email || !password) {
-    return res.status(400).json({ 
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ 
+        success: false,
+        error: errorMessages.MISSING_FIELDS
+      });
+    }
+
+    const service = new FacebookTokenService();
+    const result = await service.getBothTokens(email, password);
+    
+    res.json(result);
+  } catch (error) {
+    console.error('Error in /api/token:', error);
+    res.status(500).json({ 
       success: false,
-      error: errorMessages.MISSING_FIELDS
+      error: errorMessages.DEFAULT
     });
   }
-
-  const service = new FacebookTokenService();
-  const result = await service.getBothTokens(email, password);
-  
-  res.json(result);
 });
 
 app.post('/api/eaag', async (req, res) => {
-  const { cookies } = req.body;
-  if (!cookies) {
-    return res.status(400).json({ 
+  try {
+    const { cookies } = req.body;
+    if (!cookies) {
+      return res.status(400).json({ 
+        success: false,
+        error: errorMessages.MISSING_FIELDS
+      });
+    }
+
+    const service = new FacebookTokenService();
+    const result = await service.getEaagToken(cookies);
+    
+    res.json(result);
+  } catch (error) {
+    console.error('Error in /api/eaag:', error);
+    res.status(500).json({ 
       success: false,
-      error: errorMessages.MISSING_FIELDS
+      error: errorMessages.DEFAULT
     });
   }
-
-  const service = new FacebookTokenService();
-  const result = await service.getEaagToken(cookies);
-  
-  res.json(result);
 });
 
 // Serve frontend
@@ -259,6 +263,15 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error('Server error:', err);
+  res.status(500).json({ 
+    success: false,
+    error: errorMessages.DEFAULT
+  });
+});
+
 app.listen(PORT, () => {
-  console.log(`Server running on ${PORT}`);
+  console.log(`Server running on port ${PORT}`);
 });
